@@ -1,0 +1,23 @@
+# Stage 2 — Artifact Classification
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.40.0
+Pillow>=9.0.0
+numpy>=1.24.0
+
+# Stage 3 — Description Generation
+# Moondream2 (primary VLM — recommended)
+# Installed via transformers above + trust_remote_code=True
+einops>=0.7.0
+pyvips>=2.2.0  # also requires native libvips: brew install vips
+
+# Qwen2-VL (alternative VLM)
+# qwen-vl-utils  # optional helper, install if using Qwen2-VL
+
+# Evaluation
+nltk>=3.8
+rouge-score>=0.1.2
+bert-score>=0.3.13   # semantic similarity metric
+
+# Utilities
+tqdm>=4.65.0
