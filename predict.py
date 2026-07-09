@@ -1,8 +1,8 @@
 """
 predict.py  —  Inference + GradCAM for AI-Generated Image Detection
 ====================================================================
-Loads best_model.pt, predicts REAL or FAKE, and if FAKE runs GradCAM
-to localize artifact regions (Task 2 preparation).
+Loads the adversarially trained model (checkpoints_adv/adv_best_model.pt),
+predicts REAL or FAKE, and if FAKE runs GradCAM to localize artifact regions.
 
 Outputs saved to current directory:
     gradcam_overlay_<filename>.png   — heatmap overlaid on original image
@@ -11,7 +11,7 @@ Outputs saved to current directory:
 
 Usage:
     python predict.py --image path/to/image.jpg
-    python predict.py --image path/to/image.jpg --model checkpoints/best_model.pt
+    python predict.py --image path/to/image.jpg --model checkpoints_adv/adv_best_model.pt
 """
 
 import os
@@ -24,25 +24,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import timm
-from PIL import Image
+from PIL import Image, ImageDraw
 from torchvision import transforms
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIG — must match exactly what was used during training
+# CONFIG — must match exactly what was used during adversarial training
 # ─────────────────────────────────────────────────────────────────────────────
 
 CFG = {
     "backbone":      "vit_base_patch14_dinov2.lvd142m",
     "image_size":    518,
     "freeze_blocks": 8,
-    "model_path":    "checkpoints/best_model.pt",
+    "model_path":    "checkpoints_adv/adv_best_model.pt",  # Updated to adversarial model
 }
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD  = (0.229, 0.224, 0.225)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. MODEL DEFINITION  (identical to train_dinov2.py)
+# 1. MODEL DEFINITION  (identical to adversarialTraining.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DINOv2Classifier(nn.Module):
@@ -57,7 +57,7 @@ class DINOv2Classifier(nn.Module):
 
 
 def load_model(model_path: str, device: torch.device) -> DINOv2Classifier:
-    """Load backbone + head and restore trained weights."""
+    """Load backbone + head and restore trained weights (adversarial model)."""
     backbone = timm.create_model(
         CFG["backbone"],
         pretrained=False,          # no download needed — we load our own weights
@@ -85,13 +85,26 @@ def load_model(model_path: str, device: torch.device) -> DINOv2Classifier:
 
     model = DINOv2Classifier(backbone, head).to(device)
 
-    ckpt = torch.load(model_path, map_location=device, weights_only=False)
-    model.load_state_dict(ckpt["model_state"])
+    ckpt = torch.load(model_path, map_location=device)
+    
+    # Handle both training script formats
+    if "model_state" in ckpt:
+        model.load_state_dict(ckpt["model_state"])
+        epoch = ckpt.get('epoch', '?')
+        clean_acc = ckpt.get('clean_acc', '?')
+        adv_acc = ckpt.get('adv_acc', '?')
+    else:
+        model.load_state_dict(ckpt)
+        epoch = '?'
+        clean_acc = '?'
+        adv_acc = '?'
+    
     model.eval()
 
     print(f"  Loaded model from  : {model_path}")
-    print(f"  Checkpoint epoch   : {ckpt.get('epoch', '?')}")
-    print(f"  Best OOD acc       : {ckpt.get('val_ood_acc', '?'):.4f}")
+    print(f"  Checkpoint epoch   : {epoch}")
+    print(f"  Clean accuracy     : {clean_acc if clean_acc == '?' else f'{clean_acc:.4f}'}")
+    print(f"  Adversarial acc    : {adv_acc if adv_acc == '?' else f'{adv_acc:.4f}'}")
     return model
 
 
@@ -102,7 +115,7 @@ def load_model(model_path: str, device: torch.device) -> DINOv2Classifier:
 def preprocess(image_path: str) -> tuple:
     """
     Returns:
-        tensor  : (1, 3, H, W)  normalised tensor ready for the model
+        tensor  : (1, 3, H, W) normalised tensor ready for the model
         pil_img : original PIL image (for overlay drawing)
     """
     transform = transforms.Compose([
@@ -134,11 +147,6 @@ class ViTGradCAM:
 
     The spatial tokens (everything except the [CLS] token) form a
     (H_patches × W_patches) grid — this is our spatial map.
-
-    DINOv2 ViT-B/14 at 224×224:
-        patch_size = 14
-        num_patches = (224//14)² = 16×16 = 256 spatial tokens
-        → GradCAM map is 16×16, upsampled to 224×224 for visualisation
 
     Algorithm:
         1. Forward pass, register hook on last attention block output
@@ -178,7 +186,7 @@ class ViTGradCAM:
         self,
         tensor: torch.Tensor,
         device: torch.device,
-        target_class: int = 1,   # 1 = FAKE
+        target_class: int = 0,   # 0 = FAKE (FAKE folder comes first alphabetically)
     ) -> np.ndarray:
         """
         Returns a (H, W) numpy array in [0, 1] — the GradCAM heatmap
@@ -320,6 +328,7 @@ def get_hottest_crop(
     crop = pil_img.crop((x1, y1, x2, y2))
     return crop, (x1, y1, x2, y2)
 
+
 def draw_bbox_on_image(
     pil_img: Image.Image,
     bbox: tuple,
@@ -365,7 +374,6 @@ def predict(
     """
     image_path = Path(image_path)
     stem       = image_path.stem        # filename without extension
-    suffix     = image_path.suffix      # .jpg / .png etc.
 
     print(f"\n{'='*55}")
     print(f"  Image : {image_path}")
@@ -454,7 +462,6 @@ def predict(
     annotated_with_banner.paste(annotated, (0, banner_h))
 
     # Write text onto banner using PIL's built-in font
-    from PIL import ImageDraw
     draw       = ImageDraw.Draw(annotated_with_banner)
     label_text = f"{predicted_class}  |  {confidence:.1f}% confidence"
     text_color = (220, 80, 80) if predicted_class == "FAKE" else (80, 220, 80)
@@ -513,7 +520,7 @@ def predict(
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Predict REAL/FAKE + GradCAM artifact localisation"
+        description="Predict REAL/FAKE + GradCAM artifact localisation (Adversarially Trained Model)"
     )
     parser.add_argument(
         "--image", type=str, required=True,
@@ -521,7 +528,11 @@ def parse_args():
     )
     parser.add_argument(
         "--model", type=str, default=CFG["model_path"],
-        help=f"Path to best_model.pt (default: {CFG['model_path']})"
+        help=f"Path to adversarially trained model (default: {CFG['model_path']})"
+    )
+    parser.add_argument(
+        "--model_type", type=str, default="adversarial", choices=["adversarial", "original"],
+        help="Which model to use: 'adversarial' (default) or 'original'"
     )
     return parser.parse_args()
 
@@ -535,7 +546,7 @@ if __name__ == "__main__":
         sys.exit(1)
     if not os.path.exists(args.model):
         print(f"ERROR: Model not found: {args.model}")
-        print(f"       Make sure you have run train_dinov2.py first.")
+        print(f"       Make sure you have trained the model first.")
         sys.exit(1)
 
     # ── Device ───────────────────────────────────────────────────────────────
@@ -554,4 +565,6 @@ if __name__ == "__main__":
     conf    = result["confidence"]
     print("=" * 55)
     print(f"  VERDICT: This image is {verdict}  ({conf:.1f}% confidence)")
+    if verdict == "FAKE":
+        print(f"  🔍 Check gradcam_crop_{Path(args.image).stem}.png for artifact localization")
     print("=" * 55)

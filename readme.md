@@ -35,10 +35,19 @@ This system provides a **complete solution** for AI image authentication and exp
 
 | Capability | Method | Output |
 |------------|--------|--------|
-| **Classification** | CNN-based (DINOv2) | REAL/FAKE + Confidence |
+| **Classification** | Adversarially Trained DINOv2 | REAL/FAKE + Confidence |
 | **Localization** | GradCAM heatmaps | Suspicious region crop |
 | **Artifact Detection** | SigLIP zero-shot | 70 artifact scores |
 | **Explanation** | Qwen2-VL / Moondream2 | Natural language description |
+
+### Model Versions
+
+| Model Type | Clean Accuracy | Adversarial Accuracy | Use Case |
+|------------|---------------|---------------------|----------|
+| **Original** | 97.07% | 9.94% | Baseline detection |
+| **Adversarial** | 97.13% | **66.77%** | Production/End-Term |
+
+**The adversarial model is 6.7x more robust against attacks!**
 
 ---
 
@@ -52,12 +61,13 @@ This system provides a **complete solution** for AI image authentication and exp
 - **Automatic Caching**: Models download once, cached forever
 - **Batch Processing**: Process multiple images efficiently
 - **JSON Output**: Structured results for easy integration
+- **Model Comparison**: Compare original vs adversarial models side-by-side
 
 ### Visual Outputs
 - Raw GradCAM heatmap
 - Heatmap overlaid on original image
 - Cropped suspicious region
-- Annotated image with bounding box
+- Annotated image with bounding box + prediction banner
 
 ### Flexible Backends
 
@@ -86,5 +96,8 @@ cd summer-camp
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the pipeline
+# Run the pipeline with adversarial model (default)
 python main.py --image image.jpg --backend qwen2vl
+
+# Or compare models
+python main.py --image image.jpg --model_type both
