@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aidetect"
+version = "2.0.0"
+description = "Explainable detection of AI-generated images: DINOv2 classification, artifact localisation and natural-language explanation."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["deepfake", "ai-generated", "dinov2", "siglip", "explainability", "gradcam"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+# Runtime essentials only — every optional capability is an extra below.
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "timm>=0.9.0",
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+# Stage 2 (SigLIP) and the Moondream/Qwen backends.
+vlm = [
+    "transformers>=4.40.0",
+    "huggingface-hub>=0.19.0",
+    "accelerate>=0.24.0",
+    "einops>=0.7.0",
+]
+qwen = ["qwen-vl-utils>=0.0.8"]
+# YAML configuration files.
+config = ["pyyaml>=6.0"]
+# REST API.
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "python-multipart>=0.0.9"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.8",
+]
+all = [
+    "aidetect[vlm,qwen,config,server]",
+]
+
+[project.scripts]
+aidetect = "aidetect.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/kartik/InterIIT-Adobe-explainable-AI-Image-Detection"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+markers = [
+    "slow: needs model weights or a GPU (deselect with -m 'not slow')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",  # long lines are handled by the formatter
+    "B008",  # FastAPI's Depends()/File() defaults are idiomatic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"training/*" = ["ALL"]        # training code is kept verbatim
+"tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_unused_ignores = false
+files = ["src/aidetect"]

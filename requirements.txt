@@ -1,27 +1,37 @@
+# Runtime dependencies for the full pipeline.
+#   pip install -r requirements.txt
+#
+# Minimal install (Stage 1 detection + saliency only):
+#   pip install torch torchvision timm numpy Pillow
+#
+# Everything here is also declared in pyproject.toml; this file exists for
+# environments that prefer a plain requirements install.
 
+# ---- Stage 1: detection + saliency (required) ------------------------------
 torch>=2.0.0
 torchvision>=0.15.0
 timm>=0.9.0
-transformers>=4.35.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# ---- Stage 2/3: artifact classification + VLM explanation ------------------
+transformers>=4.40.0
 huggingface-hub>=0.19.0
 accelerate>=0.24.0
 einops>=0.7.0
-qwen-vl-utils>=0.0.1  # Optional, for Qwen2-VL
 
-Pillow>=10.0.0
-opencv-python>=4.8.0
-
-numpy>=1.24.0
-scipy>=1.11.0
-scikit-learn>=1.3.0
-
-matplotlib>=3.7.0
-tqdm>=4.65.0
-
-nltk>=3.8.0
-rouge-score>=0.1.0
-bert-score>=0.3.0
-
+# ---- Configuration files ---------------------------------------------------
 pyyaml>=6.0
-requests>=2.31.0
 
+# ---- Optional -------------------------------------------------------------
+# qwen-vl-utils>=0.0.8            # multi-image prompting for the Qwen2-VL backend
+# fastapi>=0.110                  # `aidetect serve`
+# uvicorn[standard]>=0.27         # `aidetect serve`
+# python-multipart>=0.0.9         # file uploads for `aidetect serve`
+#
+# Deliberately NOT required any more (previously listed, never actually used):
+#   opencv-python  -> replaced by numpy + Pillow rendering
+#   matplotlib     -> replaced by the built-in colormap LUTs
+#   scipy          -> replaced by the pure-numpy connected-component labeller
+#   scikit-learn   -> replaced by aidetect.evaluation.detection
+#   nltk / rouge-score / bert-score -> replaced by aidetect.evaluation.description

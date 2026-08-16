@@ -1,0 +1,78 @@
+# Default configuration for the aidetect pipeline.
+#
+# Resolution order (later wins):
+#   dataclass defaults -> this file -> AIDETECT__* env vars -> CLI --set
+#
+# Load explicitly with:      aidetect analyze img.jpg -c configs/default.yaml
+# (It is also auto-discovered when you run from the project root.)
+
+detector:
+  # Architecture — must match the trained checkpoint. Do not change.
+  backbone: vit_base_patch14_dinov2.lvd142m
+  image_size: 518
+  freeze_blocks: 8
+  head_hidden_dim: 256
+  head_dropout: 0.3
+
+  checkpoint: checkpoints_adv/adv_best_model.pt
+  fallback_checkpoints:
+    - checkpoints/best_model.pt
+
+  # ImageFolder sorts alphabetically, so FAKE=0 and REAL=1.
+  class_names: [FAKE, REAL]
+  fake_index: 0
+
+  # Tune on a validation split with: aidetect evaluate ... --labels labels.csv
+  decision_threshold: 0.5
+  temperature: 1.0
+
+  tta_hflip: false
+  batch_size: 8
+  timm_cache_dir: null
+
+explain:
+  method: gradcam            # gradcam | gradcam++ | rollout | occlusion
+  colormap: turbo            # turbo | viridis | inferno | magma | jet | hot | coolwarm | gray
+  overlay_alpha: 0.45
+  gamma: 1.0
+  hot_threshold: 0.5
+  fallback_percentile: 90.0
+  max_regions: 3
+  min_region_fraction: 0.002
+  region_padding: 20
+  min_crop_size: 96
+  component_grid: 64
+  occlusion_patch: 64
+  occlusion_stride: 32
+  save_outputs: [overlay, crop, annotated]   # + raw, panel
+
+artifacts:
+  model_name: google/siglip-base-patch16-224
+  top_k: 5
+  prompt_ensemble: true
+  score_mode: minmax          # raw | minmax | softmax | zscore
+  softmax_temperature: 0.02
+  text_batch_size: 16
+  embedding_cache_dir: .cache/aidetect/text_embeddings
+  min_score: 0.0
+
+describe:
+  backend: rule_based         # rule_based | moondream | qwen2vl
+  max_new_tokens: 200
+  max_words: 50               # competition budget for Task 2
+  max_sentences: 3
+  fallback_to_rules: true
+  do_sample: false
+  temperature: 0.7
+  top_p: 0.9
+  seed: 42
+
+runtime:
+  device: auto                # auto | cpu | cuda | cuda:0 | mps
+  dtype: auto                 # auto | float32 | float16 | bfloat16
+  seed: 42
+  output_dir: outputs
+  log_level: INFO
+  log_file: null
+  explain_real_images: false
+  num_workers: 0
